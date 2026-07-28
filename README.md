@@ -18,6 +18,7 @@ OD Update History は、WordPress 本体・テーマ・プラグインの更新�
 - CSV・TXTエクスポート
 - 管理者による全履歴削除
 - プラグインの無効化・削除後も履歴データを保持
+- GitHub Releasesを利用したOD Update History自身の管理画面更新
 
 ## 動作要件
 
@@ -62,6 +63,20 @@ WordPress.org 以外を配布元にしていても、最終的に WordPress 標�
 - GitHub Releases
 - 独自アップデートサーバー
 - 商用プラグインのライセンス更新API
+
+### OD Update History自身の更新
+
+OD Update History は [`inc2734/wp-github-plugin-updater`](https://github.com/inc2734/wp-github-plugin-updater) を利用し、このリポジトリの最新GitHub ReleaseをWordPressの更新候補として表示します。
+
+更新の確認とインストールは、WordPress管理画面の「プラグイン」または「更新」から通常のプラグインと同じように行えます。WordPressの自動更新を有効にした場合も、標準の自動更新処理が使用されます。
+
+更新確認には次のURLへの外部通信が必要です。
+
+- `https://api.github.com/repos/Olein-jp/od-update-history/`
+- `https://github.com/Olein-jp/od-update-history/`
+- `https://raw.githubusercontent.com/Olein-jp/od-update-history/`
+
+GitHub Releaseには、Composerの本番依存を含んだ `od-update-history.zip` が必要です。GitHubが自動生成する「Source code」ZIPだけでは、更新機能に必要な `vendor` ディレクトリが含まれません。
 
 ## 記録する情報
 
@@ -198,9 +213,14 @@ composer lint
 # 自動修正可能なコーディング規約違反を修正
 composer format
 
+# 配布ZIPを作成
+bash bin/build-release.sh
+
 # 開発環境を停止
 npm run env:stop
 ```
+
+配布ZIPは `build/od-update-history.zip` に作成されます。ZIP内の最上位ディレクトリは必ず `od-update-history` になります。
 
 ## ディレクトリ構成
 
@@ -209,8 +229,11 @@ npm run env:stop
 ├── includes/
 │   ├── class-od-update-history-admin.php
 │   ├── class-od-update-history-database.php
-│   └── class-od-update-history-recorder.php
+│   ├── class-od-update-history-recorder.php
+│   └── class-od-update-history-updater.php
+├── .github/workflows/release.yml
 ├── .wp-env.json
+├── bin/build-release.sh
 ├── composer.json
 ├── od-update-history.php
 ├── package.json
@@ -221,6 +244,31 @@ npm run env:stop
 - `OD_Update_History_Database`: テーブル作成、スキーマ更新、保存・取得・削除
 - `OD_Update_History_Recorder`: 更新前後の状態取得と履歴確定
 - `OD_Update_History_Admin`: 履歴一覧、フィルター、エクスポート、全削除
+- `OD_Update_History_Updater`: GitHub Releaseの確認と配布ZIP URLの指定
+- `bin/build-release.sh`: 本番依存だけを含む配布ZIPの生成
+- `.github/workflows/release.yml`: タグからの検証、ZIP生成、GitHub Release作成
+
+## リリース手順
+
+GitHub Actionsは `v` で始まるタグがpushされたときに動作します。
+
+1. `od-update-history.php` の `Version` と `OD_UPDATE_HISTORY_VERSION` を同じバージョンへ更新します。
+2. 必要に応じて `package.json` の `version` とREADMEを更新します。
+3. `composer lint` と `bash bin/build-release.sh` を実行します。
+4. 変更をコミットして `main` へpushします。
+5. プラグインバージョンと一致するタグを作成してpushします。
+
+例：
+
+```sh
+git tag v0.1.0
+git push origin main
+git push origin v0.1.0
+```
+
+ワークフローはタグの `v` を除いた値とプラグインヘッダーのバージョンが一致することを確認します。検証が成功すると、リリースノートと `od-update-history.zip` を含むGitHub Releaseが作成されます。
+
+最初のリリースは手動でサイトへインストールしてください。その後、より新しいバージョンのReleaseが公開されると、WordPress管理画面へ更新候補が表示されます。
 
 ## 開発ロードマップ
 

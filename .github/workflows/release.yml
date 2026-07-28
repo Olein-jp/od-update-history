@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          coverage: none
+
+      - name: Validate tag and plugin versions
+        shell: bash
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          plugin_version="$(sed -n 's/^ \* Version:[[:space:]]*//p' od-update-history.php)"
+          constant_version="$(sed -n "s/^define( 'OD_UPDATE_HISTORY_VERSION', '\\([^']*\\)' );$/\\1/p" od-update-history.php)"
+
+          if [[ "${tag_version}" != "${plugin_version}" || "${tag_version}" != "${constant_version}" ]]; then
+            echo "Tag ${tag_version}, plugin header ${plugin_version}, and constant ${constant_version} must match."
+            exit 1
+          fi
+
+      - name: Install development dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Run coding standards
+        run: composer lint
+
+      - name: Build release archive
+        run: bash bin/build-release.sh
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" > /dev/null 2>&1; then
+            gh release upload "${GITHUB_REF_NAME}" \
+              build/od-update-history.zip \
+              --clobber
+          else
+            gh release create "${GITHUB_REF_NAME}" \
+              build/od-update-history.zip \
+              --title "OD Update History ${GITHUB_REF_NAME}" \
+              --generate-notes
+          fi
