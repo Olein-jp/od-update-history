@@ -8,7 +8,9 @@
 		"env:stop": "wp-env stop",
 		"env:status": "wp-env status",
 		"env:logs": "wp-env logs",
-		"env:cli": "wp-env run cli wp"
+		"env:cli": "wp-env run cli wp",
+		"test": "npm run test:php",
+		"test:php": "wp-env start && wp-env run tests-cli --env-cwd=wp-content/plugins/od-update-history vendor/bin/phpunit -c phpunit.xml.dist"
 	},
 	"devDependencies": {
 		"@wordpress/env": "^11.11.0"

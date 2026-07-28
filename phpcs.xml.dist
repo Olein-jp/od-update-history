@@ -9,6 +9,7 @@
 
 	<file>od-update-history.php</file>
 	<file>includes</file>
+	<file>tests</file>
 
 	<exclude-pattern>*/node_modules/*</exclude-pattern>
 	<exclude-pattern>*/vendor/*</exclude-pattern>

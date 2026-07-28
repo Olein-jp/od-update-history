@@ -198,6 +198,9 @@ npm run env:start
 よく使うコマンド：
 
 ```sh
+# wp-envを起動し、WordPress統合テストをすべて実行
+npm test
+
 # 環境の状態を確認
 npm run env:status
 
@@ -220,6 +223,20 @@ bash bin/build-release.sh
 npm run env:stop
 ```
 
+### 自動テスト
+
+`npm test` の1コマンドで wp-env を起動し、テスト用WordPressとデータベース上でPHPUnitを実行します。テスト環境を事前に起動しておく必要はありません。
+
+現在は次の動作を検証しています。
+
+- 専用テーブルの作成、履歴の保存・取得・絞り込み・全削除
+- プラグイン、テーマ、WordPress本体の更新対象情報の取得
+- 更新前後でバージョンが変わった場合だけ履歴を保存
+- 履歴画面と全削除処理の権限チェック
+- 全削除処理のnonceチェック
+
+各テストは作成した履歴データ、ユーザー、リクエスト値を後処理で片付けます。テスト結果は実運用中のWordPressや履歴テーブルへ影響しません。テストを終えて開発環境も停止する場合は `npm run env:stop` を実行してください。
+
 配布ZIPは `build/od-update-history.zip` に作成されます。ZIP内の最上位ディレクトリは必ず `od-update-history` になります。
 
 ## ディレクトリ構成
@@ -237,6 +254,12 @@ npm run env:stop
 ├── composer.json
 ├── od-update-history.php
 ├── package.json
+├── phpunit.xml.dist
+├── tests/
+│   ├── bootstrap.php
+│   ├── OD_Update_History_Admin_Test.php
+│   ├── OD_Update_History_Database_Test.php
+│   └── OD_Update_History_Recorder_Test.php
 └── phpcs.xml.dist
 ```
 
@@ -247,6 +270,8 @@ npm run env:stop
 - `OD_Update_History_Updater`: GitHub Releaseの確認と配布ZIP URLの指定
 - `bin/build-release.sh`: 本番依存だけを含む配布ZIPの生成
 - `.github/workflows/release.yml`: タグからの検証、ZIP生成、GitHub Release作成
+- `phpunit.xml.dist`: WordPress統合テストのPHPUnit設定
+- `tests/`: テーブル操作、更新記録、管理画面の権限・nonceを検証するテスト
 
 ## リリース手順
 
@@ -254,7 +279,7 @@ GitHub Actionsは `v` で始まるタグがpushされたときに動作します
 
 1. `od-update-history.php` の `Version` と `OD_UPDATE_HISTORY_VERSION` を同じバージョンへ更新します。
 2. 必要に応じて `package.json` の `version` とREADMEを更新します。
-3. `composer lint` と `bash bin/build-release.sh` を実行します。
+3. `composer lint`、`npm test`、`bash bin/build-release.sh` を実行します。
 4. 変更をコミットして `main` へpushします。
 5. プラグインバージョンと一致するタグを作成してpushします。
 
@@ -274,7 +299,7 @@ git push origin v0.1.0
 
 追加機能と改修はGitHub Issueで管理しています。
 
-- [#1 更新履歴の自動テスト基盤を追加する](https://github.com/Olein-jp/od-update-history/issues/1)
+- [#1 更新履歴の自動テスト基盤を追加する（完了）](https://github.com/Olein-jp/od-update-history/issues/1)
 - [#2 WP_Upgraderを通らないバージョン変更の検知方式を設計する](https://github.com/Olein-jp/od-update-history/issues/2)
 - [#3 更新失敗・ロールバック履歴の状態モデルを設計する](https://github.com/Olein-jp/od-update-history/issues/3)
 - [#4 履歴一覧に期間・更新方法フィルターを追加する](https://github.com/Olein-jp/od-update-history/issues/4)
