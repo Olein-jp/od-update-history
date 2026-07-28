@@ -8,6 +8,7 @@
 	<arg name="parallel" value="8"/>
 
 	<file>od-update-history.php</file>
+	<file>includes</file>
 
 	<exclude-pattern>*/node_modules/*</exclude-pattern>
 	<exclude-pattern>*/vendor/*</exclude-pattern>
