@@ -1,0 +1,9 @@
+/node_modules/
+/vendor/
+
+.wp-env.override.json
+
+composer.phar
+npm-debug.log*
+
+/coverage/
