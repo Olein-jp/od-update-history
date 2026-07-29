@@ -14,9 +14,10 @@ OD Update History は、WordPress 本体・テーマ・プラグインの更新�
 - 手動更新、自動更新、WP-CLI を区別
 - 更新を実行した WordPress ユーザーを保存
 - WordPress 管理画面の専用「更新履歴」メニューで一覧表示
-- WordPress 本体・プラグイン・テーマによる種別フィルター
+- 種別・期間・更新方法による履歴の絞り込み
 - CSV・TXTエクスポート
-- 管理者による全履歴削除
+- 管理者による期間指定削除・全履歴削除
+- 30日・90日・180日・365日から選べる自動保持期間
 - プラグインの無効化・削除後も履歴データを保持
 - GitHub Releasesを利用したOD Update History自身の管理画面更新
 
@@ -109,11 +110,21 @@ GitHub Releaseには、Composerの本番依存を含んだ `od-update-history.zi
 - 更新方法
 - 実行者
 
-履歴は新しい順に20件ずつ表示されます。種別フィルターはページ移動とエクスポートにも引き継がれます。
+履歴は新しい順に20件ずつ表示されます。種別、開始日、終了日、更新方法で絞り込めます。絞り込み条件はページ移動とエクスポートにも引き継がれます。
+
+## 基本的な使い方
+
+1. WordPress 本体、プラグイン、またはテーマを通常どおり更新します。
+2. 管理画面の「更新履歴」を開き、記録された更新内容を確認します。
+3. 必要に応じて、種別・期間・更新方法で履歴を絞り込みます。
+4. 保守報告やバックアップが必要な場合は、CSVまたはTXTでエクスポートします。
+5. 履歴を整理する場合は、画面下部の「データ管理」で保持期間の設定または手動削除を行います。
+
+履歴の閲覧、エクスポート、保持期間の変更、削除には `manage_options` 権限が必要です。通常は管理者だけが操作できます。
 
 ## エクスポート
 
-管理画面の「エクスポート」から、現在の種別フィルターに一致する全履歴をダウンロードできます。エクスポートは `manage_options` 権限とnonceで保護されています。
+管理画面の「エクスポート」から、現在の絞り込み条件に一致する全履歴をダウンロードできます。エクスポートは `manage_options` 権限とnonceで保護されています。
 
 ### CSV
 
@@ -145,18 +156,72 @@ User: admin
 
 更新履歴は、プラグイン本体とは独立した保守記録として扱います。
 
-- プラグインを無効化しても履歴は残ります。
-- WordPress からプラグインを削除しても、履歴テーブルとデータは残ります。
-- 再インストールして有効化すると、既存の履歴を引き続き参照できます。
-- 自動的な保持期限はありません。
+### 保存場所
 
-履歴を削除する場合は、プラグインが有効な状態で「更新履歴」画面の「データ管理」を使用してください。「更新履歴をすべて削除」はテーブルを残し、保存済みレコードだけを削除します。
+更新履歴は、サイトのテーブル接頭辞を付けた次の専用テーブルに保存します。
 
-削除操作には `manage_options` 権限とnonceが必要です。操作は取り消せないため、必要に応じて先にCSVまたはTXTをエクスポートしてください。
+```text
+{prefix}od_update_history
+```
+
+通常の接頭辞が `wp_` のサイトでは `wp_od_update_history` です。更新実行者のユーザーID、対象名、バージョン、更新時点の状態などが保存されます。保持期間の設定とデータベースのバージョンは、WordPressのoptionsテーブルに次の名前で保存されます。
+
+- `od_update_history_retention_days`
+- `od_update_history_db_version`
+
+### 自動保持期間
+
+初期値は「無期限」で、自動削除は行いません。「更新履歴」画面の「データ管理」で、30日・90日・180日・365日のいずれかを選択できます。
+
+有限の保持期間を保存すると、WP-Cronが1日1回、サイトのタイムゾーンを基準に期限を過ぎた履歴を削除します。たとえば「30日」の場合、処理実行時点から30日前と同じ日時の履歴は残し、それより古い履歴だけを削除します。
+
+保持期間を保存した直後に削除されるわけではありません。最初の自動処理は通常約24時間後です。また、WP-Cronはアクセスを契機に動作するため、アクセスの少ないサイトやWP-Cronを無効化している環境では実行が遅れることがあります。確実な定期実行が必要な場合は、サーバーのcronなどからWordPress cronを実行してください。
+
+「無期限」へ戻すと自動削除の予定は解除されますが、すでに削除された履歴は復元されません。
+
+### 手動削除
+
+プラグインが有効な状態で、「更新履歴」画面の「データ管理」から実行します。
+
+- 「期間指定削除」は、30日・90日・180日・365日より古い履歴を直ちに削除します。境界日時とそれ以降の履歴は残ります。
+- 「更新履歴をすべて削除」は、専用テーブルを残したまま、保存済みの履歴レコードだけをすべて削除します。
+
+手動削除と自動削除はいずれも取り消せません。必要な履歴は、削除前にCSVまたはTXTでエクスポートしてください。管理画面からの削除操作は `manage_options` 権限とnonceで保護されています。
+
+### 無効化・アンインストール時の動作
+
+| 操作 | 履歴テーブルと履歴 | 設定 | 自動削除の予定 |
+| --- | --- | --- | --- |
+| プラグインを無効化 | 残る | 残る | 解除される |
+| WordPress管理画面からプラグインを削除（アンインストール） | 残る | 残る | 無効化時に解除される |
+| 再インストールして有効化 | 既存の履歴を再利用 | 既存の設定を再利用 | 保持期間に応じて再登録 |
+
+アンインストール時に専用テーブルやoptionsを削除する処理は、意図的に実装していません。そのため、WordPress管理画面でプラグインを削除しても履歴データはデータベースに残り、同じサイトへ再インストールすると再び参照できます。プラグインのファイルだけをFTPなどで直接削除した場合も、データベース上の履歴と設定は残ります。
+
+### データを完全に消去する場合
+
+このプラグインを今後使用せず、データベースからも完全に削除したい場合は、先に必要な履歴をエクスポートし、プラグインを無効化・削除したあとでデータベース管理ツールまたはWP-CLIを使って次のデータを手動で削除してください。
+
+1. `{prefix}od_update_history` テーブル
+2. optionsテーブル内の `od_update_history_retention_days`
+3. optionsテーブル内の `od_update_history_db_version`
+
+SQLの例を示します。`{prefix}` は実際のテーブル接頭辞へ置き換えてください。
+
+```sql
+DROP TABLE `{prefix}od_update_history`;
+DELETE FROM `{prefix}options`
+WHERE `option_name` IN (
+  'od_update_history_retention_days',
+  'od_update_history_db_version'
+);
+```
+
+この操作は復元できません。実行前にデータベース全体のバックアップを取得し、対象サイトのテーブル接頭辞が正しいことを必ず確認してください。マルチサイトではサイトごとに接頭辞が異なる場合があります。
 
 ## 現在の制約
 
-バージョン `0.1.1` は MVP です。次の変更は記録できません。
+現時点では、次の変更は記録できません。
 
 - FTP、SSH、rsync などによる直接のファイル置換
 - Composer が WordPress を介さずに行うファイル更新
@@ -230,10 +295,11 @@ npm run env:stop
 現在は次の動作を検証しています。
 
 - 専用テーブルの作成、履歴の保存・取得・絞り込み・全削除
+- 指定期間より古い履歴の手動削除と境界日時の扱い
+- 自動保持期間の初期値、定期処理、重複スケジュールの防止
 - プラグイン、テーマ、WordPress本体の更新対象情報の取得
 - 更新前後でバージョンが変わった場合だけ履歴を保存
-- 履歴画面と全削除処理の権限チェック
-- 全削除処理のnonceチェック
+- 履歴画面、保持期間設定、各削除処理の権限・nonceチェック
 
 各テストは作成した履歴データ、ユーザー、リクエスト値を後処理で片付けます。テスト結果は実運用中のWordPressや履歴テーブルへ影響しません。テストを終えて開発環境も停止する場合は `npm run env:stop` を実行してください。
 
@@ -247,6 +313,7 @@ npm run env:stop
 │   ├── class-od-update-history-admin.php
 │   ├── class-od-update-history-database.php
 │   ├── class-od-update-history-recorder.php
+│   ├── class-od-update-history-retention.php
 │   └── class-od-update-history-updater.php
 ├── .github/workflows/release.yml
 ├── .wp-env.json
@@ -259,14 +326,16 @@ npm run env:stop
 │   ├── bootstrap.php
 │   ├── OD_Update_History_Admin_Test.php
 │   ├── OD_Update_History_Database_Test.php
-│   └── OD_Update_History_Recorder_Test.php
+│   ├── OD_Update_History_Recorder_Test.php
+│   └── OD_Update_History_Retention_Test.php
 └── phpcs.xml.dist
 ```
 
 - `od-update-history.php`: プラグインヘッダー、定数、クラス読込、初期化
 - `OD_Update_History_Database`: テーブル作成、スキーマ更新、保存・取得・削除
 - `OD_Update_History_Recorder`: 更新前後の状態取得と履歴確定
-- `OD_Update_History_Admin`: 履歴一覧、フィルター、エクスポート、全削除
+- `OD_Update_History_Admin`: 履歴一覧、フィルター、エクスポート、保持期間設定、削除
+- `OD_Update_History_Retention`: 自動保持期間とWP-Cronによる定期削除
 - `OD_Update_History_Updater`: GitHub Releaseの確認と配布ZIP URLの指定
 - `bin/build-release.sh`: 本番依存だけを含む配布ZIPの生成
 - `.github/workflows/release.yml`: タグからの検証、ZIP生成、GitHub Release作成
@@ -286,9 +355,9 @@ GitHub Actionsは `v` で始まるタグがpushされたときに動作します
 例：
 
 ```sh
-git tag v0.1.1
+git tag v0.2.0
 git push origin main
-git push origin v0.1.1
+git push origin v0.2.0
 ```
 
 ワークフローはタグの `v` を除いた値とプラグインヘッダーのバージョンが一致することを確認します。検証が成功すると、リリースノートと `od-update-history.zip` を含むGitHub Releaseが作成されます。
@@ -300,10 +369,10 @@ git push origin v0.1.1
 追加機能と改修はGitHub Issueで管理しています。
 
 - [#1 更新履歴の自動テスト基盤を追加する（完了）](https://github.com/Olein-jp/od-update-history/issues/1)
-- [#2 WP_Upgraderを通らないバージョン変更の検知方式を設計する](https://github.com/Olein-jp/od-update-history/issues/2)
-- [#3 更新失敗・ロールバック履歴の状態モデルを設計する](https://github.com/Olein-jp/od-update-history/issues/3)
-- [#4 履歴一覧に期間・更新方法フィルターを追加する](https://github.com/Olein-jp/od-update-history/issues/4)
-- [#5 履歴の期間指定削除と保持期間設定を追加する](https://github.com/Olein-jp/od-update-history/issues/5)
+- [#2 WP_Upgraderを通らないバージョン変更の検知方式を設計する（完了）](https://github.com/Olein-jp/od-update-history/issues/2)
+- [#3 更新失敗・ロールバック履歴の状態モデルを設計する（完了）](https://github.com/Olein-jp/od-update-history/issues/3)
+- [#4 履歴一覧に期間・更新方法フィルターを追加する（完了）](https://github.com/Olein-jp/od-update-history/issues/4)
+- [#5 履歴の期間指定削除と保持期間設定を追加する（完了）](https://github.com/Olein-jp/od-update-history/issues/5)
 - [#6 管理画面からの更新が履歴に記録されない不具合を修正する（完了）](https://github.com/Olein-jp/od-update-history/issues/6)
 
 ## ライセンス
