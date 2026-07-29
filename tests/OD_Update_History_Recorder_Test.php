@@ -35,11 +35,11 @@ class OD_Update_History_Recorder_Test extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Verifies plugin, theme, and core target extraction.
+	 * Verifies single and bulk update target extraction.
 	 *
 	 * @return void
 	 */
-	public function test_capture_before_update_detects_supported_targets() {
+	public function test_capture_before_update_detects_single_and_bulk_targets() {
 		$recorder        = new OD_Update_History_Recorder();
 		$plugin_basename = plugin_basename( OD_UPDATE_HISTORY_FILE );
 		$theme_slug      = get_stylesheet();
@@ -55,16 +55,10 @@ class OD_Update_History_Recorder_Test extends WP_UnitTestCase {
 		$recorder->capture_before_update(
 			true,
 			array(
-				'action' => 'update',
-				'type'   => 'theme',
-				'theme'  => $theme_slug,
-			)
-		);
-		$recorder->capture_before_update(
-			true,
-			array(
-				'action' => 'update',
-				'type'   => 'core',
+				'theme'       => $theme_slug,
+				'temp_backup' => array(
+					'slug' => $theme_slug,
+				),
 			)
 		);
 
@@ -72,9 +66,7 @@ class OD_Update_History_Recorder_Test extends WP_UnitTestCase {
 
 		$this->assertArrayHasKey( 'plugin:' . $plugin_basename, $pending );
 		$this->assertArrayHasKey( 'theme:' . $theme_slug, $pending );
-		$this->assertArrayHasKey( 'core:wordpress', $pending ); // phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText
 		$this->assertSame( OD_UPDATE_HISTORY_VERSION, $pending[ 'plugin:' . $plugin_basename ]['version'] );
-		$this->assertNotSame( '', $pending['core:wordpress']['version'] );
 	}
 
 	/**
@@ -144,6 +136,127 @@ class OD_Update_History_Recorder_Test extends WP_UnitTestCase {
 		$this->assertSame( 'manual', $entries[0]->update_method );
 		$this->assertSame( $administrator, (int) $entries[0]->user_id );
 		$this->assertSame( array(), $this->get_pending( $recorder ) );
+	}
+
+	/**
+	 * Verifies WordPress bulk update hook data records plugins and themes.
+	 *
+	 * @return void
+	 */
+	public function test_bulk_update_context_records_changed_plugin_and_theme() {
+		$recorder   = new OD_Update_History_Recorder();
+		$plugin_one = plugin_basename( OD_UPDATE_HISTORY_DIR . 'tests/fixtures/plugins/fixture-one.php' );
+		$plugin_two = plugin_basename( OD_UPDATE_HISTORY_DIR . 'tests/fixtures/plugins/fixture-two.php' );
+		$theme_slug = get_stylesheet();
+
+		$recorder->capture_before_update(
+			true,
+			array(
+				'plugin'      => $plugin_one,
+				'temp_backup' => array(
+					'slug' => dirname( $plugin_one ),
+				),
+			)
+		);
+		$recorder->capture_before_update(
+			true,
+			array(
+				'plugin'      => $plugin_two,
+				'temp_backup' => array(
+					'slug' => dirname( $plugin_two ),
+				),
+			)
+		);
+		$recorder->capture_before_update(
+			true,
+			array(
+				'theme'       => $theme_slug,
+				'temp_backup' => array(
+					'slug' => $theme_slug,
+				),
+			)
+		);
+
+		$pending = $this->get_pending( $recorder );
+
+		$pending[ 'plugin:' . $plugin_one ]['version'] = '1.0.0';
+		$pending[ 'plugin:' . $plugin_two ]['version'] = '1.0.0';
+		$pending[ 'theme:' . $theme_slug ]['version']  = '0.0.1';
+		$this->set_pending( $recorder, $pending );
+
+		$recorder->record_completed_update(
+			new stdClass(),
+			array(
+				'action'  => 'update',
+				'type'    => 'plugin',
+				'bulk'    => true,
+				'plugins' => array( $plugin_one, $plugin_two ),
+			)
+		);
+		$recorder->record_completed_update(
+			new stdClass(),
+			array(
+				'action' => 'update',
+				'type'   => 'theme',
+				'bulk'   => true,
+				'themes' => array( $theme_slug ),
+			)
+		);
+
+		$entries = OD_Update_History_Database::get_entries();
+		$types   = array_values( array_unique( wp_list_pluck( $entries, 'object_type' ) ) );
+		$plugins = array_values(
+			wp_list_pluck(
+				array_filter(
+					$entries,
+					static function ( $entry ) {
+						return 'plugin' === $entry->object_type;
+					}
+				),
+				'object_slug'
+			)
+		);
+		sort( $types );
+		sort( $plugins );
+
+		$this->assertCount( 3, $entries );
+		$this->assertSame( array(), $this->get_pending( $recorder ) );
+		$this->assertSame( array( 'plugin', 'theme' ), $types );
+		$this->assertSame( array( $plugin_one, $plugin_two ), $plugins );
+	}
+
+	/**
+	 * Verifies a core update uses the version loaded at request start.
+	 *
+	 * @return void
+	 */
+	public function test_core_update_records_loaded_and_installed_versions() {
+		global $wp_version;
+
+		$recorder        = new OD_Update_History_Recorder();
+		$loaded_version  = '0.0.1';
+		$current_version = $wp_version;
+		$wp_version      = $loaded_version;
+
+		try {
+			$recorder->record_completed_update(
+				new stdClass(),
+				array(
+					'action' => 'update',
+					'type'   => 'core',
+				)
+			);
+		} finally {
+			$wp_version = $current_version;
+		}
+
+		$entries = OD_Update_History_Database::get_entries();
+
+		$this->assertCount( 1, $entries );
+		$this->assertSame( 'core', $entries[0]->object_type );
+		$this->assertSame( 'wordpress', $entries[0]->object_slug ); // phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText
+		$this->assertSame( $loaded_version, $entries[0]->version_from );
+		$this->assertSame( $current_version, $entries[0]->version_to );
 	}
 
 	/**

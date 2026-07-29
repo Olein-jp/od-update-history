@@ -156,7 +156,7 @@ User: admin
 
 ## 現在の制約
 
-バージョン `0.1.0` は MVP です。次の変更は記録できません。
+バージョン `0.1.1` は MVP です。次の変更は記録できません。
 
 - FTP、SSH、rsync などによる直接のファイル置換
 - Composer が WordPress を介さずに行うファイル更新
@@ -286,9 +286,9 @@ GitHub Actionsは `v` で始まるタグがpushされたときに動作します
 例：
 
 ```sh
-git tag v0.1.0
+git tag v0.1.1
 git push origin main
-git push origin v0.1.0
+git push origin v0.1.1
 ```
 
 ワークフローはタグの `v` を除いた値とプラグインヘッダーのバージョンが一致することを確認します。検証が成功すると、リリースノートと `od-update-history.zip` を含むGitHub Releaseが作成されます。
@@ -304,6 +304,7 @@ git push origin v0.1.0
 - [#3 更新失敗・ロールバック履歴の状態モデルを設計する](https://github.com/Olein-jp/od-update-history/issues/3)
 - [#4 履歴一覧に期間・更新方法フィルターを追加する](https://github.com/Olein-jp/od-update-history/issues/4)
 - [#5 履歴の期間指定削除と保持期間設定を追加する](https://github.com/Olein-jp/od-update-history/issues/5)
+- [#6 管理画面からの更新が履歴に記録されない不具合を修正する（完了）](https://github.com/Olein-jp/od-update-history/issues/6)
 
 ## ライセンス
 

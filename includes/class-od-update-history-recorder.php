@@ -39,7 +39,10 @@ class OD_Update_History_Recorder {
 	 * @return bool|WP_Error
 	 */
 	public function capture_before_update( $response, $hook_extra ) {
-		if ( ! is_array( $hook_extra ) || 'update' !== ( $hook_extra['action'] ?? '' ) ) {
+		if (
+			! is_array( $hook_extra ) ||
+			( isset( $hook_extra['action'] ) && 'update' !== $hook_extra['action'] )
+		) {
 			return $response;
 		}
 
@@ -70,6 +73,10 @@ class OD_Update_History_Recorder {
 			$key    = $this->get_pending_key( $target['type'], $target['slug'] );
 			$before = $this->pending[ $key ] ?? null;
 			$after  = $this->get_component_state( $target['type'], $target['slug'] );
+
+			if ( null === $before && 'core' === $target['type'] ) {
+				$before = $this->get_loaded_core_state();
+			}
 
 			unset( $this->pending[ $key ] );
 
@@ -114,6 +121,14 @@ class OD_Update_History_Recorder {
 	private function get_targets( $hook_extra ) {
 		$type    = $hook_extra['type'] ?? '';
 		$targets = array();
+
+		if ( '' === $type && ! empty( $hook_extra['plugin'] ) && is_string( $hook_extra['plugin'] ) ) {
+			$type = 'plugin';
+		}
+
+		if ( '' === $type && ! empty( $hook_extra['theme'] ) && is_string( $hook_extra['theme'] ) ) {
+			$type = 'theme';
+		}
 
 		if ( 'plugin' === $type ) {
 			$plugins = array();
@@ -238,6 +253,25 @@ class OD_Update_History_Recorder {
 		};
 
 		return $read_version( $version_file );
+	}
+
+	/**
+	 * Returns the core state loaded at the beginning of the request.
+	 *
+	 * Core_Upgrader does not run the upgrader_pre_install filter. The global
+	 * version remains unchanged after core files are replaced, so it provides
+	 * the installed version from before the update.
+	 *
+	 * @return array{name: string, version: string, active: null}
+	 */
+	private function get_loaded_core_state() {
+		global $wp_version;
+
+		return array(
+			'name'    => 'WordPress',
+			'version' => (string) $wp_version,
+			'active'  => null,
+		);
 	}
 
 	/**
