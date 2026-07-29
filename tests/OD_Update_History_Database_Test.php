@@ -186,6 +186,26 @@ class OD_Update_History_Database_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies that only entries strictly older than the cutoff are deleted.
+	 *
+	 * @return void
+	 */
+	public function test_delete_older_than_preserves_boundary_and_newer_entries() {
+		$this->insert_filter_entry( '2026-06-28 11:59:59', 'plugin', 'manual', 'Older Entry' );
+		$this->insert_filter_entry( '2026-06-28 12:00:00', 'plugin', 'manual', 'Boundary Entry' );
+		$this->insert_filter_entry( '2026-06-28 12:00:01', 'plugin', 'manual', 'Newer Entry' );
+
+		$this->assertSame( 1, OD_Update_History_Database::delete_older_than( '2026-06-28 12:00:00' ) );
+		$this->assertSame( 2, OD_Update_History_Database::count_entries() );
+		$this->assertFalse( OD_Update_History_Database::delete_older_than( '2026-02-30 12:00:00' ) );
+
+		$entries = OD_Update_History_Database::get_entries();
+
+		$this->assertSame( 'Newer Entry', $entries[0]->object_name );
+		$this->assertSame( 'Boundary Entry', $entries[1]->object_name );
+	}
+
+	/**
 	 * Inserts a row used by filtering tests.
 	 *
 	 * @param string $occurred_at  Stored local date and time.

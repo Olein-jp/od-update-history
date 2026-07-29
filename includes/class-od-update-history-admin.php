@@ -30,6 +30,8 @@ class OD_Update_History_Admin {
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
 		add_action( 'admin_post_od_update_history_export', array( $this, 'export' ) );
 		add_action( 'admin_post_od_update_history_delete_all', array( $this, 'delete_all' ) );
+		add_action( 'admin_post_od_update_history_delete_older', array( $this, 'delete_older' ) );
+		add_action( 'admin_post_od_update_history_save_retention', array( $this, 'save_retention' ) );
 	}
 
 	/**
@@ -59,7 +61,8 @@ class OD_Update_History_Admin {
 			wp_die( esc_html__( 'このページを表示する権限がありません。', 'od-update-history' ) );
 		}
 
-		$filters = $this->get_requested_filters();
+		$filters        = $this->get_requested_filters();
+		$retention_days = OD_Update_History_Retention::get_retention_days();
 		// No nonce is required for the read-only list view.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
@@ -81,6 +84,33 @@ class OD_Update_History_Admin {
 			<?php if ( isset( $_GET['history-deleted'] ) ) : ?>
 				<div class="notice notice-success is-dismissible">
 					<p><?php esc_html_e( '更新履歴をすべて削除しました。', 'od-update-history' ); ?></p>
+				</div>
+			<?php endif; ?>
+
+			<?php
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$pruned_days = isset( $_GET['pruned-days'] ) && is_string( $_GET['pruned-days'] ) ? absint( $_GET['pruned-days'] ) : 0;
+			// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+			$pruned_count = isset( $_GET['pruned-count'] ) && is_string( $_GET['pruned-count'] ) ? absint( $_GET['pruned-count'] ) : 0;
+			?>
+			<?php if ( isset( $_GET['history-pruned'] ) && OD_Update_History_Retention::is_allowed_days( $pruned_days ) && 0 !== $pruned_days ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+				<div class="notice notice-success is-dismissible">
+					<p>
+						<?php
+						printf(
+							/* translators: 1: Retention days, 2: Number of deleted entries. */
+							esc_html__( '%1$d日より古い更新履歴を%2$d件削除しました。', 'od-update-history' ),
+							esc_html( number_format_i18n( $pruned_days ) ),
+							esc_html( number_format_i18n( $pruned_count ) )
+						);
+						?>
+					</p>
+				</div>
+			<?php endif; ?>
+
+			<?php if ( isset( $_GET['retention-updated'] ) ) : // phpcs:ignore WordPress.Security.NonceVerification.Recommended ?>
+				<div class="notice notice-success is-dismissible">
+					<p><?php esc_html_e( '自動保持期間を更新しました。', 'od-update-history' ); ?></p>
 				</div>
 			<?php endif; ?>
 
@@ -198,6 +228,38 @@ class OD_Update_History_Admin {
 
 			<hr>
 			<h2><?php esc_html_e( 'データ管理', 'od-update-history' ); ?></h2>
+			<h3><?php esc_html_e( '自動保持期間', 'od-update-history' ); ?></h3>
+			<p><?php esc_html_e( '設定した日数より古い履歴を1日1回自動で削除します。初期値の「無期限」では自動削除しません。', 'od-update-history' ); ?></p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>">
+				<input type="hidden" name="action" value="od_update_history_save_retention">
+				<label for="od-update-history-retention-days"><?php esc_html_e( '保持期間', 'od-update-history' ); ?></label>
+				<select id="od-update-history-retention-days" name="retention_days">
+					<option value="0" <?php selected( $retention_days, 0 ); ?>><?php esc_html_e( '無期限', 'od-update-history' ); ?></option>
+					<option value="30" <?php selected( $retention_days, 30 ); ?>><?php esc_html_e( '30日', 'od-update-history' ); ?></option>
+					<option value="90" <?php selected( $retention_days, 90 ); ?>><?php esc_html_e( '90日', 'od-update-history' ); ?></option>
+					<option value="180" <?php selected( $retention_days, 180 ); ?>><?php esc_html_e( '180日', 'od-update-history' ); ?></option>
+					<option value="365" <?php selected( $retention_days, 365 ); ?>><?php esc_html_e( '365日', 'od-update-history' ); ?></option>
+				</select>
+				<?php wp_nonce_field( 'od_update_history_save_retention' ); ?>
+				<?php submit_button( __( '保持期間を保存', 'od-update-history' ), 'secondary', 'submit', false ); ?>
+			</form>
+
+			<h3><?php esc_html_e( '期間指定削除', 'od-update-history' ); ?></h3>
+			<p><?php esc_html_e( '選択した日数より古い更新履歴を削除します。境界日時とそれ以降の履歴は残ります。', 'od-update-history' ); ?></p>
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( '指定期間より古い更新履歴を削除しますか？この操作は取り消せません。', 'od-update-history' ) ); ?>');">
+				<input type="hidden" name="action" value="od_update_history_delete_older">
+				<label for="od-update-history-delete-older-days"><?php esc_html_e( '削除対象', 'od-update-history' ); ?></label>
+				<select id="od-update-history-delete-older-days" name="older_than_days">
+					<option value="30"><?php esc_html_e( '30日より古い履歴', 'od-update-history' ); ?></option>
+					<option value="90"><?php esc_html_e( '90日より古い履歴', 'od-update-history' ); ?></option>
+					<option value="180"><?php esc_html_e( '180日より古い履歴', 'od-update-history' ); ?></option>
+					<option value="365"><?php esc_html_e( '365日より古い履歴', 'od-update-history' ); ?></option>
+				</select>
+				<?php wp_nonce_field( 'od_update_history_delete_older' ); ?>
+				<?php submit_button( __( '指定期間より古い履歴を削除', 'od-update-history' ), 'delete', 'submit', false ); ?>
+			</form>
+
+			<h3><?php esc_html_e( '全履歴削除', 'od-update-history' ); ?></h3>
 			<p><?php esc_html_e( 'テーブルを残したまま、保存済みの更新履歴をすべて削除します。この操作は取り消せません。', 'od-update-history' ); ?></p>
 			<form method="post" action="<?php echo esc_url( admin_url( 'admin-post.php' ) ); ?>" onsubmit="return confirm('<?php echo esc_js( __( '更新履歴をすべて削除しますか？この操作は取り消せません。', 'od-update-history' ) ); ?>');">
 				<input type="hidden" name="action" value="od_update_history_delete_all">
@@ -264,16 +326,71 @@ class OD_Update_History_Admin {
 		check_admin_referer( 'od_update_history_delete_all' );
 		OD_Update_History_Database::delete_all();
 
-		wp_safe_redirect(
-			add_query_arg(
-				array(
-					'page'            => 'od-update-history',
-					'history-deleted' => '1',
-				),
-				admin_url( 'admin.php' )
+		$this->redirect_to_history(
+			array(
+				'history-deleted' => '1',
 			)
 		);
-		exit;
+	}
+
+	/**
+	 * Deletes history older than an allowed period.
+	 *
+	 * @return void
+	 */
+	public function delete_older() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'この操作を行う権限がありません。', 'od-update-history' ) );
+		}
+
+		check_admin_referer( 'od_update_history_delete_older' );
+
+		$days = $this->get_posted_retention_days( 'older_than_days', false );
+
+		if ( null === $days ) {
+			wp_die( esc_html__( '削除期間が正しくありません。', 'od-update-history' ) );
+		}
+
+		$deleted = OD_Update_History_Database::delete_older_than(
+			OD_Update_History_Retention::get_cutoff_date( $days )
+		);
+
+		if ( false === $deleted ) {
+			wp_die( esc_html__( '更新履歴を削除できませんでした。', 'od-update-history' ) );
+		}
+
+		$this->redirect_to_history(
+			array(
+				'history-pruned' => '1',
+				'pruned-days'    => $days,
+				'pruned-count'   => $deleted,
+			)
+		);
+	}
+
+	/**
+	 * Saves optional automatic retention.
+	 *
+	 * @return void
+	 */
+	public function save_retention() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'この操作を行う権限がありません。', 'od-update-history' ) );
+		}
+
+		check_admin_referer( 'od_update_history_save_retention' );
+
+		$days = $this->get_posted_retention_days( 'retention_days', true );
+
+		if ( null === $days || ! OD_Update_History_Retention::set_retention_days( $days ) ) {
+			wp_die( esc_html__( '保持期間が正しくありません。', 'od-update-history' ) );
+		}
+
+		$this->redirect_to_history(
+			array(
+				'retention-updated' => '1',
+			)
+		);
 	}
 
 	/**
@@ -430,6 +547,55 @@ class OD_Update_History_Admin {
 		}
 
 		return checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] );
+	}
+
+	/**
+	 * Returns an allowed retention period from POST data.
+	 *
+	 * @param string $key             Request key.
+	 * @param bool   $allow_unlimited Whether zero is accepted.
+	 * @return int|null
+	 */
+	private function get_posted_retention_days( $key, $allow_unlimited ) {
+		// Stateful callers verify their dedicated nonce before this method runs.
+		// phpcs:ignore WordPress.Security.NonceVerification.Missing
+		$value = isset( $_POST[ $key ] ) && is_string( $_POST[ $key ] ) ? sanitize_text_field( wp_unslash( $_POST[ $key ] ) ) : '';
+
+		if ( ! ctype_digit( $value ) ) {
+			return null;
+		}
+
+		$days = (int) $value;
+
+		if (
+			! OD_Update_History_Retention::is_allowed_days( $days ) ||
+			( ! $allow_unlimited && 0 === $days )
+		) {
+			return null;
+		}
+
+		return $days;
+	}
+
+	/**
+	 * Redirects back to the history page with a status message.
+	 *
+	 * @param array<string, string|int> $args Status query arguments.
+	 * @return void
+	 */
+	private function redirect_to_history( $args ) {
+		wp_safe_redirect(
+			add_query_arg(
+				array_merge(
+					array(
+						'page' => 'od-update-history',
+					),
+					$args
+				),
+				admin_url( 'admin.php' )
+			)
+		);
+		exit;
 	}
 
 	/**

@@ -273,4 +273,52 @@ class OD_Update_History_Database {
 			$wpdb->prepare( 'DELETE FROM %i', $table_name )
 		);
 	}
+
+	/**
+	 * Deletes entries strictly older than a site-local cutoff date.
+	 *
+	 * An entry at the exact cutoff remains stored.
+	 *
+	 * @param string $cutoff MySQL date in the site timezone.
+	 * @return int|false Number of deleted rows, or false for invalid input or query failure.
+	 */
+	public static function delete_older_than( $cutoff ) {
+		global $wpdb;
+
+		if ( ! self::is_valid_datetime( $cutoff ) ) {
+			return false;
+		}
+
+		$table_name = self::get_table_name();
+
+		return $wpdb->query( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare(
+				'DELETE FROM %i WHERE occurred_at < %s',
+				$table_name,
+				$cutoff
+			)
+		);
+	}
+
+	/**
+	 * Checks for a real MySQL date and time.
+	 *
+	 * @param mixed $date Date value.
+	 * @return bool
+	 */
+	private static function is_valid_datetime( $date ) {
+		if (
+			! is_string( $date ) ||
+			1 !== preg_match( '/\A(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})\z/', $date, $matches )
+		) {
+			return false;
+		}
+
+		return (
+			checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] ) &&
+			(int) $matches[4] <= 23 &&
+			(int) $matches[5] <= 59 &&
+			(int) $matches[6] <= 59
+		);
+	}
 }

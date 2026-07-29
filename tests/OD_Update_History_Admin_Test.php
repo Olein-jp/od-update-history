@@ -27,6 +27,9 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 
 		OD_Update_History_Database::activate();
 		OD_Update_History_Database::delete_all();
+		OD_Update_History_Retention::unschedule();
+		delete_option( OD_Update_History_Retention::OPTION_NAME );
+		OD_Update_History_Retention::activate();
 
 		$this->admin = new OD_Update_History_Admin();
 
@@ -42,6 +45,8 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 		remove_filter( 'wp_die_handler', array( $this, 'filter_wp_die_handler' ) );
 
 		OD_Update_History_Database::delete_all();
+		OD_Update_History_Retention::unschedule();
+		delete_option( OD_Update_History_Retention::OPTION_NAME );
 		wp_set_current_user( 0 );
 
 		$_GET     = array();
@@ -248,6 +253,177 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 		}
 
 		$this->assertSame( 1, OD_Update_History_Database::count_entries() );
+	}
+
+	/**
+	 * Verifies that period deletion requires manage_options.
+	 *
+	 * @return void
+	 */
+	public function test_delete_older_requires_manage_options_capability() {
+		$this->insert_history_entry();
+
+		$subscriber = self::factory()->user->create(
+			array(
+				'role' => 'subscriber',
+			)
+		);
+		wp_set_current_user( $subscriber );
+
+		$_POST = array(
+			'older_than_days' => '30',
+		);
+
+		try {
+			$this->admin->delete_older();
+			$this->fail( 'Period deletion should have been rejected.' );
+		} catch ( RuntimeException $exception ) {
+			$this->assertStringContainsString( '権限', $exception->getMessage() );
+		}
+
+		$this->assertSame( 1, OD_Update_History_Database::count_entries() );
+	}
+
+	/**
+	 * Verifies that period deletion requires its dedicated nonce.
+	 *
+	 * @return void
+	 */
+	public function test_delete_older_requires_nonce() {
+		$this->insert_history_entry();
+
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		$_POST = array(
+			'older_than_days' => '30',
+		);
+
+		try {
+			$this->admin->delete_older();
+			$this->fail( 'Period deletion without a nonce should have been rejected.' );
+		} catch ( RuntimeException $exception ) {
+			$this->assertNotSame( '', $exception->getMessage() );
+		}
+
+		$this->assertSame( 1, OD_Update_History_Database::count_entries() );
+	}
+
+	/**
+	 * Verifies that retention changes require manage_options.
+	 *
+	 * @return void
+	 */
+	public function test_save_retention_requires_manage_options_capability() {
+		$subscriber = self::factory()->user->create(
+			array(
+				'role' => 'subscriber',
+			)
+		);
+		wp_set_current_user( $subscriber );
+
+		$_POST = array(
+			'retention_days' => '30',
+		);
+
+		try {
+			$this->admin->save_retention();
+			$this->fail( 'Retention update should have been rejected.' );
+		} catch ( RuntimeException $exception ) {
+			$this->assertStringContainsString( '権限', $exception->getMessage() );
+		}
+
+		$this->assertSame( 0, OD_Update_History_Retention::get_retention_days() );
+	}
+
+	/**
+	 * Verifies that retention changes require their dedicated nonce.
+	 *
+	 * @return void
+	 */
+	public function test_save_retention_requires_nonce() {
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		$_POST = array(
+			'retention_days' => '30',
+		);
+
+		try {
+			$this->admin->save_retention();
+			$this->fail( 'Retention update without a nonce should have been rejected.' );
+		} catch ( RuntimeException $exception ) {
+			$this->assertNotSame( '', $exception->getMessage() );
+		}
+
+		$this->assertSame( 0, OD_Update_History_Retention::get_retention_days() );
+	}
+
+	/**
+	 * Verifies that unsupported retention values are rejected.
+	 *
+	 * @return void
+	 */
+	public function test_save_retention_rejects_invalid_value() {
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		$_POST    = array(
+			'retention_days' => '31',
+		);
+		$_REQUEST = array(
+			'_wpnonce' => wp_create_nonce( 'od_update_history_save_retention' ),
+		);
+
+		try {
+			$this->admin->save_retention();
+			$this->fail( 'Unsupported retention should have been rejected.' );
+		} catch ( RuntimeException $exception ) {
+			$this->assertStringContainsString( '保持期間', $exception->getMessage() );
+		}
+
+		$this->assertSame( 0, OD_Update_History_Retention::get_retention_days() );
+		$this->assertFalse( wp_next_scheduled( OD_Update_History_Retention::CRON_HOOK ) );
+	}
+
+	/**
+	 * Verifies retention controls and the period deletion count notice.
+	 *
+	 * @return void
+	 */
+	public function test_history_page_renders_retention_controls_and_delete_notice() {
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		$_GET = array(
+			'history-pruned' => '1',
+			'pruned-days'    => '90',
+			'pruned-count'   => '3',
+		);
+
+		ob_start();
+		$this->admin->render_page();
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'name="retention_days"', $output );
+		$this->assertStringContainsString( 'name="older_than_days"', $output );
+		$this->assertStringContainsString( '90日より古い更新履歴を3件削除しました。', $output );
 	}
 
 	/**

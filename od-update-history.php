@@ -31,10 +31,21 @@ if ( is_readable( $od_update_history_autoloader ) ) {
 
 require_once OD_UPDATE_HISTORY_DIR . 'includes/class-od-update-history-database.php';
 require_once OD_UPDATE_HISTORY_DIR . 'includes/class-od-update-history-recorder.php';
+require_once OD_UPDATE_HISTORY_DIR . 'includes/class-od-update-history-retention.php';
 require_once OD_UPDATE_HISTORY_DIR . 'includes/class-od-update-history-admin.php';
 require_once OD_UPDATE_HISTORY_DIR . 'includes/class-od-update-history-updater.php';
 
-register_activation_hook( __FILE__, array( 'OD_Update_History_Database', 'activate' ) );
+/**
+ * Creates required storage and initializes retention.
+ *
+ * @return void
+ */
+function od_update_history_activate() {
+	OD_Update_History_Database::activate();
+	OD_Update_History_Retention::activate();
+}
+register_activation_hook( __FILE__, 'od_update_history_activate' );
+register_deactivation_hook( __FILE__, array( 'OD_Update_History_Retention', 'unschedule' ) );
 
 /**
  * Starts the plugin.
@@ -43,6 +54,7 @@ register_activation_hook( __FILE__, array( 'OD_Update_History_Database', 'activa
  */
 function od_update_history_init() {
 	OD_Update_History_Database::maybe_upgrade();
+	OD_Update_History_Retention::register_hooks();
 
 	$recorder = new OD_Update_History_Recorder();
 	$recorder->register_hooks();
