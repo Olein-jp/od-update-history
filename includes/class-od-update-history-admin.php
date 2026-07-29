@@ -59,16 +59,18 @@ class OD_Update_History_Admin {
 			wp_die( esc_html__( 'このページを表示する権限がありません。', 'od-update-history' ) );
 		}
 
-		$object_type = $this->get_requested_object_type();
+		$filters = $this->get_requested_filters();
 		// No nonce is required for the read-only list view.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
 		$current_page = isset( $_GET['paged'] ) ? max( 1, absint( $_GET['paged'] ) ) : 1;
-		$total        = OD_Update_History_Database::count_entries( $object_type );
+		$total        = OD_Update_History_Database::count_entries( $filters );
 		$entries      = OD_Update_History_Database::get_entries(
-			array(
-				'object_type' => $object_type,
-				'limit'       => self::PER_PAGE,
-				'offset'      => ( $current_page - 1 ) * self::PER_PAGE,
+			array_merge(
+				$filters,
+				array(
+					'limit'  => self::PER_PAGE,
+					'offset' => ( $current_page - 1 ) * self::PER_PAGE,
+				)
 			)
 		);
 		?>
@@ -97,9 +99,21 @@ class OD_Update_History_Admin {
 				<label for="od-update-history-object-type"><?php esc_html_e( '種別', 'od-update-history' ); ?></label>
 				<select id="od-update-history-object-type" name="object_type">
 					<option value=""><?php esc_html_e( 'すべて', 'od-update-history' ); ?></option>
-					<option value="core" <?php selected( $object_type, 'core' ); ?>><?php esc_html_e( 'WordPress', 'od-update-history' ); ?></option>
-					<option value="plugin" <?php selected( $object_type, 'plugin' ); ?>><?php esc_html_e( 'プラグイン', 'od-update-history' ); ?></option>
-					<option value="theme" <?php selected( $object_type, 'theme' ); ?>><?php esc_html_e( 'テーマ', 'od-update-history' ); ?></option>
+					<option value="core" <?php selected( $filters['object_type'], 'core' ); ?>><?php esc_html_e( 'WordPress', 'od-update-history' ); ?></option>
+					<option value="plugin" <?php selected( $filters['object_type'], 'plugin' ); ?>><?php esc_html_e( 'プラグイン', 'od-update-history' ); ?></option>
+					<option value="theme" <?php selected( $filters['object_type'], 'theme' ); ?>><?php esc_html_e( 'テーマ', 'od-update-history' ); ?></option>
+				</select>
+				<label for="od-update-history-date-from"><?php esc_html_e( '開始日', 'od-update-history' ); ?></label>
+				<input type="date" id="od-update-history-date-from" name="date_from" value="<?php echo esc_attr( $filters['date_from'] ); ?>">
+				<label for="od-update-history-date-to"><?php esc_html_e( '終了日', 'od-update-history' ); ?></label>
+				<input type="date" id="od-update-history-date-to" name="date_to" value="<?php echo esc_attr( $filters['date_to'] ); ?>">
+				<label for="od-update-history-update-method"><?php esc_html_e( '更新方法', 'od-update-history' ); ?></label>
+				<select id="od-update-history-update-method" name="update_method">
+					<option value=""><?php esc_html_e( 'すべて', 'od-update-history' ); ?></option>
+					<option value="manual" <?php selected( $filters['update_method'], 'manual' ); ?>><?php esc_html_e( '手動', 'od-update-history' ); ?></option>
+					<option value="automatic" <?php selected( $filters['update_method'], 'automatic' ); ?>><?php esc_html_e( '自動', 'od-update-history' ); ?></option>
+					<option value="wp_cli" <?php selected( $filters['update_method'], 'wp_cli' ); ?>><?php esc_html_e( 'WP-CLI', 'od-update-history' ); ?></option>
+					<option value="unknown" <?php selected( $filters['update_method'], 'unknown' ); ?>><?php esc_html_e( '不明', 'od-update-history' ); ?></option>
 				</select>
 				<?php submit_button( __( '絞り込む', 'od-update-history' ), 'secondary', 'filter_action', false ); ?>
 			</form>
@@ -144,9 +158,17 @@ class OD_Update_History_Admin {
 			$total_pages = (int) ceil( $total / self::PER_PAGE );
 
 			if ( $total_pages > 1 ) {
-				$pagination = paginate_links(
+				$pagination_args = array_filter( $filters );
+				$pagination_args = array_merge(
 					array(
-						'base'      => add_query_arg( 'paged', '%#%' ),
+						'page'  => 'od-update-history',
+						'paged' => '%#%',
+					),
+					$pagination_args
+				);
+				$pagination      = paginate_links(
+					array(
+						'base'      => add_query_arg( $pagination_args, admin_url( 'admin.php' ) ),
 						'format'    => '',
 						'current'   => $current_page,
 						'total'     => $total_pages,
@@ -164,12 +186,12 @@ class OD_Update_History_Admin {
 
 			<hr>
 			<h2><?php esc_html_e( 'エクスポート', 'od-update-history' ); ?></h2>
-			<p><?php esc_html_e( '現在の種別フィルターに一致する履歴をダウンロードします。', 'od-update-history' ); ?></p>
+			<p><?php esc_html_e( '現在の絞り込み条件に一致する履歴をダウンロードします。', 'od-update-history' ); ?></p>
 			<p>
-				<a class="button" href="<?php echo esc_url( $this->get_export_url( 'csv', $object_type ) ); ?>">
+				<a class="button" href="<?php echo esc_url( $this->get_export_url( 'csv', $filters ) ); ?>">
 					<?php esc_html_e( 'CSVをダウンロード', 'od-update-history' ); ?>
 				</a>
-				<a class="button" href="<?php echo esc_url( $this->get_export_url( 'txt', $object_type ) ); ?>">
+				<a class="button" href="<?php echo esc_url( $this->get_export_url( 'txt', $filters ) ); ?>">
 					<?php esc_html_e( 'TXTをダウンロード', 'od-update-history' ); ?>
 				</a>
 			</p>
@@ -198,18 +220,20 @@ class OD_Update_History_Admin {
 
 		check_admin_referer( 'od_update_history_export' );
 
-		$format      = isset( $_GET['format'] ) ? sanitize_key( wp_unslash( $_GET['format'] ) ) : '';
-		$object_type = $this->get_requested_object_type();
+		$format  = isset( $_GET['format'] ) && is_string( $_GET['format'] ) ? sanitize_key( wp_unslash( $_GET['format'] ) ) : '';
+		$filters = $this->get_requested_filters();
 
 		if ( ! in_array( $format, array( 'csv', 'txt' ), true ) ) {
 			wp_die( esc_html__( '未対応の出力形式です。', 'od-update-history' ) );
 		}
 
 		$entries  = OD_Update_History_Database::get_entries(
-			array(
-				'object_type' => $object_type,
-				'limit'       => PHP_INT_MAX,
-				'offset'      => 0,
+			array_merge(
+				$filters,
+				array(
+					'limit'  => PHP_INT_MAX,
+					'offset' => 0,
+				)
 			)
 		);
 		$filename = 'od-update-history-' . gmdate( 'Ymd-His' ) . '.' . $format;
@@ -312,21 +336,46 @@ class OD_Update_History_Admin {
 	/**
 	 * Gets a nonce-protected export URL.
 	 *
-	 * @param string $format      Export format.
-	 * @param string $object_type Optional type filter.
+	 * @param string                $format  Export format.
+	 * @param array<string, string> $filters Validated filters.
 	 * @return string
 	 */
-	private function get_export_url( $format, $object_type ) {
-		$url = add_query_arg(
+	private function get_export_url( $format, $filters ) {
+		$query_args = array_merge(
 			array(
-				'action'      => 'od_update_history_export',
-				'format'      => $format,
-				'object_type' => $object_type,
+				'action' => 'od_update_history_export',
+				'format' => $format,
 			),
+			array_filter( $filters )
+		);
+		$url        = add_query_arg(
+			$query_args,
 			admin_url( 'admin-post.php' )
 		);
 
 		return wp_nonce_url( $url, 'od_update_history_export' );
+	}
+
+	/**
+	 * Returns all validated list filters from the request.
+	 *
+	 * @return array{object_type: string, date_from: string, date_to: string, update_method: string}
+	 */
+	private function get_requested_filters() {
+		$date_from = $this->get_requested_date( 'date_from' );
+		$date_to   = $this->get_requested_date( 'date_to' );
+
+		if ( '' !== $date_from && '' !== $date_to && $date_from > $date_to ) {
+			$date_from = '';
+			$date_to   = '';
+		}
+
+		return array(
+			'object_type'   => $this->get_requested_object_type(),
+			'date_from'     => $date_from,
+			'date_to'       => $date_to,
+			'update_method' => $this->get_requested_update_method(),
+		);
 	}
 
 	/**
@@ -337,9 +386,50 @@ class OD_Update_History_Admin {
 	private function get_requested_object_type() {
 		// The caller performs nonce verification for stateful actions; list filters are read-only.
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
-		$object_type = isset( $_GET['object_type'] ) ? sanitize_key( wp_unslash( $_GET['object_type'] ) ) : '';
+		$object_type = isset( $_GET['object_type'] ) && is_string( $_GET['object_type'] ) ? sanitize_key( wp_unslash( $_GET['object_type'] ) ) : '';
 
 		return in_array( $object_type, array( 'core', 'plugin', 'theme' ), true ) ? $object_type : '';
+	}
+
+	/**
+	 * Returns a validated date from the request.
+	 *
+	 * @param string $key Request key.
+	 * @return string
+	 */
+	private function get_requested_date( $key ) {
+		// The caller performs nonce verification for stateful actions; list filters are read-only.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$date = isset( $_GET[ $key ] ) && is_string( $_GET[ $key ] ) ? sanitize_text_field( wp_unslash( $_GET[ $key ] ) ) : '';
+
+		return $this->is_valid_date( $date ) ? $date : '';
+	}
+
+	/**
+	 * Returns a validated update method from the request.
+	 *
+	 * @return string
+	 */
+	private function get_requested_update_method() {
+		// The caller performs nonce verification for stateful actions; list filters are read-only.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		$update_method = isset( $_GET['update_method'] ) && is_string( $_GET['update_method'] ) ? sanitize_key( wp_unslash( $_GET['update_method'] ) ) : '';
+
+		return in_array( $update_method, array( 'manual', 'automatic', 'wp_cli', 'unknown' ), true ) ? $update_method : '';
+	}
+
+	/**
+	 * Checks for a real date in the expected request format.
+	 *
+	 * @param string $date Date value.
+	 * @return bool
+	 */
+	private function is_valid_date( $date ) {
+		if ( 1 !== preg_match( '/\A(\d{4})-(\d{2})-(\d{2})\z/', $date, $matches ) ) {
+			return false;
+		}
+
+		return checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] );
 	}
 
 	/**

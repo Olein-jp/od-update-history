@@ -129,62 +129,134 @@ class OD_Update_History_Database {
 		$args = wp_parse_args(
 			$args,
 			array(
-				'object_type' => '',
-				'limit'       => 20,
-				'offset'      => 0,
+				'object_type'   => '',
+				'date_from'     => '',
+				'date_to'       => '',
+				'update_method' => '',
+				'limit'         => 20,
+				'offset'        => 0,
 			)
 		);
 
 		$table_name = self::get_table_name();
 		$limit      = max( 1, (int) $args['limit'] );
 		$offset     = max( 0, (int) $args['offset'] );
+		$conditions = self::get_filter_conditions( $args );
+		$query      = 'SELECT * FROM %i';
+		$values     = array( $table_name );
 
-		if ( in_array( $args['object_type'], array( 'core', 'plugin', 'theme' ), true ) ) {
-			return $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-				$wpdb->prepare(
-					'SELECT * FROM %i WHERE object_type = %s ORDER BY occurred_at DESC, id DESC LIMIT %d OFFSET %d',
-					$table_name,
-					$args['object_type'],
-					$limit,
-					$offset
-				)
-			);
+		if ( ! empty( $conditions['clauses'] ) ) {
+			$query .= ' WHERE ' . implode( ' AND ', $conditions['clauses'] );
+			$values = array_merge( $values, $conditions['values'] );
 		}
 
+		$query   .= ' ORDER BY occurred_at DESC, id DESC LIMIT %d OFFSET %d';
+		$values[] = $limit;
+		$values[] = $offset;
+
 		return $wpdb->get_results( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->prepare(
-				'SELECT * FROM %i ORDER BY occurred_at DESC, id DESC LIMIT %d OFFSET %d',
-				$table_name,
-				$limit,
-				$offset
-			)
+			$wpdb->prepare( $query, $values ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
 		);
 	}
 
 	/**
 	 * Counts history entries.
 	 *
-	 * @param string $object_type Optional object type.
+	 * @param array<string, mixed>|string $args Optional filters or object type.
 	 * @return int
 	 */
-	public static function count_entries( $object_type = '' ) {
+	public static function count_entries( $args = array() ) {
 		global $wpdb;
 
-		$table_name = self::get_table_name();
-
-		if ( in_array( $object_type, array( 'core', 'plugin', 'theme' ), true ) ) {
-			return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-				$wpdb->prepare(
-					'SELECT COUNT(*) FROM %i WHERE object_type = %s',
-					$table_name,
-					$object_type
-				)
+		if ( is_string( $args ) ) {
+			$args = array(
+				'object_type' => $args,
 			);
 		}
 
-		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
-			$wpdb->prepare( 'SELECT COUNT(*) FROM %i', $table_name )
+		$args       = wp_parse_args(
+			$args,
+			array(
+				'object_type'   => '',
+				'date_from'     => '',
+				'date_to'       => '',
+				'update_method' => '',
+			)
 		);
+		$table_name = self::get_table_name();
+		$conditions = self::get_filter_conditions( $args );
+		$query      = 'SELECT COUNT(*) FROM %i';
+		$values     = array( $table_name );
+
+		if ( ! empty( $conditions['clauses'] ) ) {
+			$query .= ' WHERE ' . implode( ' AND ', $conditions['clauses'] );
+			$values = array_merge( $values, $conditions['values'] );
+		}
+
+		return (int) $wpdb->get_var( // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery,WordPress.DB.DirectDatabaseQuery.NoCaching
+			$wpdb->prepare( $query, $values ) // phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		);
+	}
+
+	/**
+	 * Builds validated WHERE conditions for history queries.
+	 *
+	 * Stored dates use the site timezone, so date boundaries can be compared
+	 * directly without converting them to UTC.
+	 *
+	 * @param array<string, mixed> $args Query arguments.
+	 * @return array{clauses: array<int, string>, values: array<int, string>}
+	 */
+	private static function get_filter_conditions( $args ) {
+		$clauses = array();
+		$values  = array();
+
+		if ( in_array( $args['object_type'], array( 'core', 'plugin', 'theme' ), true ) ) {
+			$clauses[] = 'object_type = %s';
+			$values[]  = $args['object_type'];
+		}
+
+		if ( in_array( $args['update_method'], array( 'manual', 'automatic', 'wp_cli', 'unknown' ), true ) ) {
+			$clauses[] = 'update_method = %s';
+			$values[]  = $args['update_method'];
+		}
+
+		$date_from = self::is_valid_date( $args['date_from'] ) ? $args['date_from'] : '';
+		$date_to   = self::is_valid_date( $args['date_to'] ) ? $args['date_to'] : '';
+
+		if ( '' !== $date_from && '' !== $date_to && $date_from > $date_to ) {
+			$date_from = '';
+			$date_to   = '';
+		}
+
+		if ( '' !== $date_from ) {
+			$clauses[] = 'occurred_at >= %s';
+			$values[]  = $date_from . ' 00:00:00';
+		}
+
+		if ( '' !== $date_to ) {
+			$clauses[] = 'occurred_at <= %s';
+			$values[]  = $date_to . ' 23:59:59';
+		}
+
+		return array(
+			'clauses' => $clauses,
+			'values'  => $values,
+		);
+	}
+
+	/**
+	 * Checks for a real date in the expected request format.
+	 *
+	 * @param mixed $date Date value.
+	 * @return bool
+	 */
+	private static function is_valid_date( $date ) {
+		if ( ! is_string( $date ) || 1 !== preg_match( '/\A(\d{4})-(\d{2})-(\d{2})\z/', $date, $matches ) ) {
+			return false;
+		}
+
+		return checkdate( (int) $matches[2], (int) $matches[3], (int) $matches[1] );
 	}
 
 	/**

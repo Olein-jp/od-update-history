@@ -97,6 +97,90 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 	}
 
 	/**
+	 * Verifies combined filters in rows, pagination links, and export URLs.
+	 *
+	 * @return void
+	 */
+	public function test_history_page_preserves_combined_filters() {
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		for ( $index = 1; $index <= 21; $index++ ) {
+			$this->insert_filter_entry(
+				sprintf( 'Matching Plugin %02d', $index ),
+				'plugin',
+				'manual',
+				sprintf( '2026-07-15 12:00:%02d', $index )
+			);
+		}
+
+		$this->insert_filter_entry( 'Wrong Type', 'theme', 'manual', '2026-07-15 12:30:00' );
+		$this->insert_filter_entry( 'Wrong Method', 'plugin', 'automatic', '2026-07-15 12:30:00' );
+		$this->insert_filter_entry( 'Outside Range', 'plugin', 'manual', '2026-08-01 00:00:00' );
+
+		$_GET = array(
+			'page'          => 'od-update-history',
+			'object_type'   => 'plugin',
+			'date_from'     => '2026-07-01',
+			'date_to'       => '2026-07-31',
+			'update_method' => 'manual',
+		);
+
+		ob_start();
+		$this->admin->render_page();
+		$output         = ob_get_clean();
+		$decoded_output = html_entity_decode( $output, ENT_QUOTES, 'UTF-8' );
+
+		$this->assertSame( 20, substr_count( $output, 'Matching Plugin' ) );
+		$this->assertStringNotContainsString( 'Wrong Type', $output );
+		$this->assertStringNotContainsString( 'Wrong Method', $output );
+		$this->assertStringNotContainsString( 'Outside Range', $output );
+		$this->assertStringContainsString( 'object_type=plugin', $decoded_output );
+		$this->assertStringContainsString( 'date_from=2026-07-01', $decoded_output );
+		$this->assertStringContainsString( 'date_to=2026-07-31', $decoded_output );
+		$this->assertStringContainsString( 'update_method=manual', $decoded_output );
+		$this->assertStringContainsString( 'paged=2', $decoded_output );
+		$this->assertStringContainsString( 'action=od_update_history_export', $decoded_output );
+		$this->assertStringContainsString( 'format=csv', $decoded_output );
+		$this->assertStringContainsString( 'format=txt', $decoded_output );
+	}
+
+	/**
+	 * Verifies that invalid dates and methods are not reflected or applied.
+	 *
+	 * @return void
+	 */
+	public function test_history_page_ignores_invalid_filter_values() {
+		$administrator = self::factory()->user->create(
+			array(
+				'role' => 'administrator',
+			)
+		);
+		wp_set_current_user( $administrator );
+
+		$this->insert_filter_entry( 'Visible Entry', 'plugin', 'manual', '2026-07-15 12:00:00' );
+
+		$_GET = array(
+			'date_from'     => '2026-02-30',
+			'date_to'       => 'invalid-date',
+			'update_method' => 'invalid-method',
+		);
+
+		ob_start();
+		$this->admin->render_page();
+		$output = ob_get_clean();
+
+		$this->assertStringContainsString( 'Visible Entry', $output );
+		$this->assertStringNotContainsString( '2026-02-30', $output );
+		$this->assertStringNotContainsString( 'invalid-date', $output );
+		$this->assertStringNotContainsString( 'invalid-method', $output );
+	}
+
+	/**
 	 * Verifies that lower-privilege users cannot read the history screen.
 	 *
 	 * @return void
@@ -179,6 +263,29 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 				'object_name'  => 'Sample Plugin',
 				'version_from' => '1.0.0',
 				'version_to'   => '1.1.0',
+			)
+		);
+	}
+
+	/**
+	 * Inserts one row for list filtering tests.
+	 *
+	 * @param string $object_name   Display name.
+	 * @param string $object_type   Component type.
+	 * @param string $update_method Update method.
+	 * @param string $occurred_at   Stored local date and time.
+	 * @return void
+	 */
+	private function insert_filter_entry( $object_name, $object_type, $update_method, $occurred_at ) {
+		OD_Update_History_Database::insert(
+			array(
+				'occurred_at'   => $occurred_at,
+				'object_type'   => $object_type,
+				'object_slug'   => sanitize_key( $object_name ),
+				'object_name'   => $object_name,
+				'version_from'  => '1.0.0',
+				'version_to'    => '1.1.0',
+				'update_method' => $update_method,
 			)
 		);
 	}
