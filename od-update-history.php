@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       OD Update History
  * Description:       Records update history in WordPress.
- * Version:           0.2.0
+ * Version:           0.2.1
  * Requires at least: 6.9
  * Requires PHP:      7.4
  * Author:            Olein Design
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'OD_UPDATE_HISTORY_VERSION', '0.2.0' );
+define( 'OD_UPDATE_HISTORY_VERSION', '0.2.1' );
 define( 'OD_UPDATE_HISTORY_DB_VERSION', '1' );
 define( 'OD_UPDATE_HISTORY_FILE', __FILE__ );
 define( 'OD_UPDATE_HISTORY_DIR', plugin_dir_path( __FILE__ ) );

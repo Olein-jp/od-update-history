@@ -1,6 +1,6 @@
 {
 	"name": "od-update-history",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"private": true,
 	"description": "Development environment for the OD Update History WordPress plugin.",
 	"scripts": {
