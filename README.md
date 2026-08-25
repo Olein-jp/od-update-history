@@ -23,7 +23,7 @@ OD Update History は、WordPress 本体・テーマ・プラグインの更新�
 
 ## 動作要件
 
-- WordPress 6.9 以上
+- WordPress 6.9 以上（WordPress 7.1 まで動作確認済み）
 - PHP 7.4 以上
 - MySQL または MariaDB
 
