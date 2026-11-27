@@ -28,10 +28,30 @@ class OD_Update_History_Admin {
 	 */
 	public function register_hooks() {
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
+		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_styles' ) );
 		add_action( 'admin_post_od_update_history_export', array( $this, 'export' ) );
 		add_action( 'admin_post_od_update_history_delete_all', array( $this, 'delete_all' ) );
 		add_action( 'admin_post_od_update_history_delete_older', array( $this, 'delete_older' ) );
 		add_action( 'admin_post_od_update_history_save_retention', array( $this, 'save_retention' ) );
+	}
+
+	/**
+	 * Loads the stylesheet on the history screen.
+	 *
+	 * @param string $hook_suffix Current admin screen hook.
+	 * @return void
+	 */
+	public function enqueue_styles( $hook_suffix ) {
+		if ( 'toplevel_page_od-update-history' !== $hook_suffix ) {
+			return;
+		}
+
+		wp_enqueue_style(
+			'od-update-history-admin',
+			plugins_url( 'assets/admin.css', OD_UPDATE_HISTORY_FILE ),
+			array(),
+			OD_UPDATE_HISTORY_VERSION
+		);
 	}
 
 	/**
@@ -202,6 +222,8 @@ class OD_Update_History_Admin {
 						'format'    => '',
 						'current'   => $current_page,
 						'total'     => $total_pages,
+						'end_size'  => 1,
+						'mid_size'  => 1,
 						'type'      => 'list',
 						'prev_text' => __( '前へ', 'od-update-history' ),
 						'next_text' => __( '次へ', 'od-update-history' ),
@@ -209,7 +231,11 @@ class OD_Update_History_Admin {
 				);
 
 				if ( $pagination ) {
-					echo '<div class="tablenav"><div class="tablenav-pages">' . wp_kses_post( $pagination ) . '</div></div>';
+					?>
+					<nav class="od-update-history-pagination" aria-label="<?php esc_attr_e( '更新履歴のページナビゲーション', 'od-update-history' ); ?>">
+						<?php echo wp_kses_post( $pagination ); ?>
+					</nav>
+					<?php
 				}
 			}
 			?>

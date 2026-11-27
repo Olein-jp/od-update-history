@@ -15,6 +15,7 @@ cp "${PROJECT_DIR}/od-update-history.php" "${PACKAGE_DIR}/"
 cp "${PROJECT_DIR}/README.md" "${PACKAGE_DIR}/"
 cp "${PROJECT_DIR}/composer.json" "${PACKAGE_DIR}/"
 cp "${PROJECT_DIR}/composer.lock" "${PACKAGE_DIR}/"
+cp -R "${PROJECT_DIR}/assets" "${PACKAGE_DIR}/"
 cp -R "${PROJECT_DIR}/includes" "${PACKAGE_DIR}/"
 
 composer install \

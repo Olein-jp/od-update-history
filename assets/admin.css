@@ -1,0 +1,47 @@
+.od-update-history-pagination {
+	margin-block: 12px;
+}
+
+.od-update-history-pagination ul.page-numbers {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 4px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.od-update-history-pagination li {
+	margin: 0;
+}
+
+.od-update-history-pagination li .page-numbers {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	box-sizing: border-box;
+	min-inline-size: 36px;
+	min-block-size: 36px;
+	padding-inline: 8px;
+}
+
+.od-update-history-pagination a.page-numbers,
+.od-update-history-pagination .current {
+	border: 1px solid #8c8f94;
+	border-radius: 3px;
+	background: #fff;
+	text-decoration: none;
+}
+
+.od-update-history-pagination a.page-numbers:hover {
+	border-color: currentColor;
+	background: #f6f7f7;
+}
+
+.od-update-history-pagination .current {
+	border-color: #2c3338;
+	background: #2c3338;
+	color: #fff;
+	font-weight: 600;
+}

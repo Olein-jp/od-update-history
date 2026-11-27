@@ -114,12 +114,12 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 		);
 		wp_set_current_user( $administrator );
 
-		for ( $index = 1; $index <= 21; $index++ ) {
+		for ( $index = 1; $index <= 181; $index++ ) {
 			$this->insert_filter_entry(
 				sprintf( 'Matching Plugin %02d', $index ),
 				'plugin',
 				'manual',
-				sprintf( '2026-07-15 12:00:%02d', $index )
+				sprintf( '2026-07-15 12:%02d:%02d', intdiv( $index, 60 ), $index % 60 )
 			);
 		}
 
@@ -133,6 +133,7 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 			'date_from'     => '2026-07-01',
 			'date_to'       => '2026-07-31',
 			'update_method' => 'manual',
+			'paged'         => '5',
 		);
 
 		ob_start();
@@ -148,7 +149,13 @@ class OD_Update_History_Admin_Test extends WP_UnitTestCase {
 		$this->assertStringContainsString( 'date_from=2026-07-01', $decoded_output );
 		$this->assertStringContainsString( 'date_to=2026-07-31', $decoded_output );
 		$this->assertStringContainsString( 'update_method=manual', $decoded_output );
-		$this->assertStringContainsString( 'paged=2', $decoded_output );
+		$this->assertStringContainsString( '<nav class="od-update-history-pagination"', $output );
+		$this->assertStringContainsString( 'aria-current="page"', $output );
+		$this->assertStringContainsString( 'paged=1', $decoded_output );
+		$this->assertStringContainsString( 'paged=4', $decoded_output );
+		$this->assertStringContainsString( 'paged=6', $decoded_output );
+		$this->assertStringContainsString( 'paged=10', $decoded_output );
+		$this->assertSame( 2, substr_count( $output, 'class="page-numbers dots"' ) );
 		$this->assertStringContainsString( 'action=od_update_history_export', $decoded_output );
 		$this->assertStringContainsString( 'format=csv', $decoded_output );
 		$this->assertStringContainsString( 'format=txt', $decoded_output );
